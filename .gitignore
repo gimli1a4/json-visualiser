@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Override global gitignore — share .claude knowledge (commands, CLAUDE.md)
+# settings.local.json is excluded above by *.local
+!.claude/
+!.claude/**
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
