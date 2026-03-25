@@ -1,60 +1,148 @@
+/**
+ * main.js — Integration entry point.
+ * Wires the UI layer (Agent B) with the visualizer layer (Agent A).
+ * This is the only file that imports from both layers.
+ */
+
 import './style.css'
-import javascriptLogo from './assets/javascript.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import { setupCounter } from './counter.js'
+import { initTabs } from './ui/tabs.js'
+import { initJsonTab } from './ui/jsonTab.js'
+import { showError } from './ui/errorBanner.js'
+import { initInspector } from './ui/inspector.js'
+import { initThemeManager } from './controls/themeManager.js'
+import { initControlsPanel } from './controls/controlsPanel.js'
+import { initSettingsPanel } from './ui/settingsPanel.js'
 
-document.querySelector('#app').innerHTML = `
-<section id="center">
-  <div class="hero">
-    <img src="${heroImg}" class="base" width="170" height="179">
-    <img src="${javascriptLogo}" class="framework" alt="JavaScript logo"/>
-    <img src=${viteLogo} class="vite" alt="Vite logo" />
-  </div>
-  <div>
-    <h1>Get started</h1>
-    <p>Edit <code>src/main.js</code> and save to test <code>HMR</code></p>
-  </div>
-  <button id="counter" type="button" class="counter"></button>
-</section>
+// ── State ────────────────────────────────────────────────────────────────────
 
-<div class="ticks"></div>
+let currentJson = ''
+let jsonDirty = false
+let scene = null
+let sceneInitialized = false
 
-<section id="next-steps">
-  <div id="docs">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#documentation-icon"></use></svg>
-    <h2>Documentation</h2>
-    <p>Your questions, answered</p>
-    <ul>
-      <li>
-        <a href="https://vite.dev/" target="_blank">
-          <img class="logo" src=${viteLogo} alt="" />
-          Explore Vite
-        </a>
-      </li>
-      <li>
-        <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript" target="_blank">
-          <img class="button-icon" src="${javascriptLogo}" alt="">
-          Learn more
-        </a>
-      </li>
-    </ul>
-  </div>
-  <div id="social">
-    <svg class="icon" role="presentation" aria-hidden="true"><use href="/icons.svg#social-icon"></use></svg>
-    <h2>Connect with us</h2>
-    <p>Join the Vite community</p>
-    <ul>
-      <li><a href="https://github.com/vitejs/vite" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#github-icon"></use></svg>GitHub</a></li>
-      <li><a href="https://chat.vite.dev/" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#discord-icon"></use></svg>Discord</a></li>
-      <li><a href="https://x.com/vite_js" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#x-icon"></use></svg>X.com</a></li>
-      <li><a href="https://bsky.app/profile/vite.dev" target="_blank"><svg class="button-icon" role="presentation" aria-hidden="true"><use href="/icons.svg#bluesky-icon"></use></svg>Bluesky</a></li>
-    </ul>
-  </div>
-</section>
+// ── Lazy visualizer imports ──────────────────────────────────────────────────
 
-<div class="ticks"></div>
-<section id="spacer"></section>
-`
+async function loadVisualizerModules() {
+  const [{ parseJson }, { JsonScene }] = await Promise.all([
+    import('./parser/jsonParser.js'),
+    import('./visualizer/scene.js'),
+  ])
+  return { parseJson, JsonScene }
+}
 
-setupCounter(document.querySelector('#counter'))
+// ── Scene init ───────────────────────────────────────────────────────────────
+
+async function ensureScene(themeManager) {
+  if (sceneInitialized) return scene
+
+  try {
+    const { JsonScene } = await loadVisualizerModules()
+    const canvas = document.getElementById('viz-canvas')
+    scene = new JsonScene(canvas)
+    scene.attachThemeManager(themeManager)
+    scene.resize()
+    scene.setTheme(themeManager.getTheme())
+
+    // Node select → inspector
+    const inspector = initInspector()
+    scene.onNodeSelect((node) => {
+      if (node) inspector.show(node)
+      else inspector.hide()
+    })
+
+    sceneInitialized = true
+
+    // Handle resize
+    window.addEventListener('resize', () => scene.resize())
+
+    // Truncation warning
+    window.addEventListener('jv:truncated', (e) => {
+      showError(`Graph truncated: showing first ${e.detail.count} nodes (max 500).`)
+    })
+  } catch (err) {
+    console.warn('[main.js] Visualizer not available:', err.message)
+  }
+
+  return scene
+}
+
+// ── Activate visualize tab ───────────────────────────────────────────────────
+
+async function activateVizTab(themeManager) {
+  if (!jsonDirty && sceneInitialized) return
+
+  const s = await ensureScene(themeManager)
+  if (!s) return
+
+  if (!currentJson.trim()) return
+
+  try {
+    const { parseJson } = await loadVisualizerModules()
+    const root = parseJson(currentJson)
+    s.load(root)
+    jsonDirty = false
+    showError(null)
+  } catch (err) {
+    showError(`JSON parse error: ${err.message}`)
+  }
+}
+
+// ── Bootstrap ────────────────────────────────────────────────────────────────
+
+window.addEventListener('DOMContentLoaded', async () => {
+  // Theme manager — must be first so data-theme is set before any render
+  const themeManager = initThemeManager({
+    onThemeChange: (theme) => {
+      if (scene) scene.setTheme(theme)
+    },
+  })
+
+  // JSON tab — returns a promise (handles async ?url= fetch)
+  const jsonTabResult = await initJsonTab({
+    onJsonChange: (value) => {
+      currentJson = value
+      jsonDirty = true
+    },
+  })
+  const { autoVisualize, getCurrentJson } = jsonTabResult
+
+  // Tabs
+  const { activateTab } = initTabs({
+    onActivateViz: () => activateVizTab(themeManager),
+  })
+
+  // Controls panel (async — imports layout registry)
+  initControlsPanel({
+    onResetCamera: () => { if (scene) scene.resetCamera() },
+    onLayoutChange: (id) => { if (scene) scene.setLayout(id) },
+    onZoom: (dir) => {
+      if (!scene) return
+      // Zoom via camera position step — delegate to scene if it exposes zoom,
+      // otherwise use a synthetic wheel event on the canvas as fallback
+      if (typeof scene.zoom === 'function') {
+        scene.zoom(dir)
+      } else {
+        const canvas = document.getElementById('viz-canvas')
+        const delta = dir === 'in' ? -100 : 100
+        canvas.dispatchEvent(new WheelEvent('wheel', { deltaY: delta, bubbles: true }))
+      }
+    },
+    onSearch: (query) => { if (scene) scene.search(query) },
+    onCollapseAll: () => { if (scene) scene.collapseAll() },
+    onExpandAll: () => { if (scene) scene.expandAll() },
+  })
+
+  // Settings panel
+  initSettingsPanel({ themeManager })
+
+  // Auto-switch to Visualize if query param was present
+  if (autoVisualize) {
+    currentJson = getCurrentJson()
+    jsonDirty = true
+    activateTab('visualize')
+  }
+
+  // Expose for console debugging
+  window._scene = () => scene
+  window._themeManager = themeManager
+})

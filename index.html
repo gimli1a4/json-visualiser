@@ -1,13 +1,68 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>json-visualiser</title>
+    <title>JSON Visualiser</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
   <body>
-    <div id="app"></div>
+    <header>
+      <span class="app-title">JSON Visualiser</span>
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="json">JSON</button>
+        <button class="tab-btn" data-tab="visualize">Visualize</button>
+      </nav>
+      <div class="header-actions">
+        <button id="share-btn" title="Copy share URL">Share</button>
+        <button id="settings-btn" title="Settings">&#9881;</button>
+        <button id="theme-btn" title="Toggle theme">&#9680;</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="tab-panel active" id="tab-json">
+        <textarea id="json-input" placeholder="Paste JSON here..."></textarea>
+        <div id="file-drop">
+          Drop a .json file here or
+          <label>browse<input type="file" accept=".json" /></label>
+        </div>
+        <div id="url-input-row">
+          <input type="url" id="url-input" placeholder="https://..." />
+          <button id="fetch-btn">Fetch</button>
+        </div>
+        <button id="format-btn">Format</button>
+      </div>
+
+      <div class="tab-panel" id="tab-visualize">
+        <canvas id="viz-canvas"></canvas>
+        <div id="label-renderer-container"></div>
+        <div id="controls-panel"></div>
+        <div id="inspector" hidden></div>
+      </div>
+    </main>
+
+    <div id="error-banner" hidden></div>
+
+    <div id="settings-modal" hidden>
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <h2>Node Colors</h2>
+        <div class="color-pickers">
+          <label>Object <input type="color" data-type="object" value="#3b82f6" /></label>
+          <label>Array <input type="color" data-type="array" value="#14b8a6" /></label>
+          <label>String <input type="color" data-type="string" value="#22c55e" /></label>
+          <label>Number <input type="color" data-type="number" value="#f59e0b" /></label>
+          <label>Boolean <input type="color" data-type="boolean" value="#a855f7" /></label>
+          <label>Null <input type="color" data-type="null" value="#6b7280" /></label>
+        </div>
+        <div class="modal-actions">
+          <button id="reset-colors-btn">Reset to defaults</button>
+          <button id="close-settings-btn">Close</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
