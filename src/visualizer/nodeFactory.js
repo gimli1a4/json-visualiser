@@ -14,8 +14,9 @@
 
 import * as THREE from 'three';
 
-const LARGE_SIZE = 0.6;
-const SMALL_SIZE = 0.35;
+const LARGE_SIZE  = 0.6;
+const SMALL_SIZE  = 0.35;
+const LEAF_SIZE   = 0.15;  // string/number — just an interaction anchor; label is the visual
 
 /**
  * Create a Three.js Mesh representing the given node.
@@ -35,14 +36,17 @@ export function createNodeMesh(node, color) {
       geometry = new THREE.CylinderGeometry(SMALL_SIZE, SMALL_SIZE, SMALL_SIZE * 2, 8);
       break;
     case 'string':
-      geometry = new THREE.SphereGeometry(SMALL_SIZE, 16, 12);
+      geometry = new THREE.SphereGeometry(LEAF_SIZE, 10, 8);
       break;
     case 'number':
-      geometry = new THREE.BoxGeometry(SMALL_SIZE * 2, SMALL_SIZE * 2, SMALL_SIZE * 2);
+      geometry = new THREE.BoxGeometry(LEAF_SIZE * 2, LEAF_SIZE * 2, LEAF_SIZE * 2);
       break;
     case 'boolean':
-      // IcosahedronGeometry with detail=0 gives a shape close to a tetrahedron
+      // IcosahedronGeometry with detail=0; color encodes value, not type
       geometry = new THREE.IcosahedronGeometry(SMALL_SIZE, 0);
+      material = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(node.value === true ? '#22c55e' : '#ef4444'),
+      });
       break;
     case 'null':
       geometry = new THREE.SphereGeometry(SMALL_SIZE, 16, 12);

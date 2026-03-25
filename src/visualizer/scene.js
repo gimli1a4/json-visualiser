@@ -241,15 +241,17 @@ export class JsonScene {
       this._scene.add(mesh);
       this._meshes.push(mesh);
 
-      // Create label (hidden by default; interaction.js shows on hover)
-      const labelText = node.key !== 'root'
-        ? node.valueType === 'object' || node.valueType === 'array'
-          ? `${node.key} (${node.valueType})`
-          : `${node.key}: ${String(node.value).slice(0, 40)}`
-        : 'root';
-      const label = createLabel(labelText);
-      label.position.set(0, 0.6, 0);
-      label.visible = false;
+      // Leaf nodes (string/number) show their value as a persistent label;
+      // container nodes and booleans show on hover only.
+      const isLeaf = node.valueType === 'string' || node.valueType === 'number';
+      const labelText = isLeaf
+        ? String(node.value).slice(0, 32)
+        : node.key !== 'root'
+          ? node.key
+          : 'root';
+      const label = createLabel(labelText, isLeaf);
+      label.position.set(0, isLeaf ? 0.3 : 0.7, 0);
+      label.visible = isLeaf;  // leaf labels always on; others show on hover
       mesh.add(label);
       this._labels.set(node.id, label);
     }

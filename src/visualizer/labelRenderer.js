@@ -27,14 +27,15 @@ export function initLabelRenderer(container) {
 
 /**
  * Create a CSS2DObject (HTML label) for a given text string.
- * The div carries class "node-label"; styling lives in style.css.
  *
- * @param {string} text
+ * @param {string}  text
+ * @param {boolean} [isLeaf=false]  - leaf nodes (string/number) get an extra
+ *                                    class that makes them larger and always visible
  * @returns {CSS2DObject}
  */
-export function createLabel(text) {
+export function createLabel(text, isLeaf = false) {
   const div = document.createElement('div');
-  div.className = 'node-label';
+  div.className = isLeaf ? 'node-label node-label--leaf' : 'node-label';
   div.textContent = text;
   return new CSS2DObject(div);
 }

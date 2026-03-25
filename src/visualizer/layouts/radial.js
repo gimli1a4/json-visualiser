@@ -1,64 +1,100 @@
 /**
  * radial.js
- * Default radial tree layout.
+ * Radial tree layout with subtree-proportional angular sectors.
  *
- * Nodes at each depth are distributed evenly around a circle in the XY plane.
- * Circle radius = depth * 3 units. Root sits at the origin.
- * A small Z offset per depth level (depth * 0.3) adds parallax when orbiting —
- * it does NOT encode hierarchy.
+ * Each node's angular sector is proportional to its subtree size, so large
+ * subtrees get more arc and don't overlap with small neighbours.
+ *
+ * Axes:
+ *   XY  — radial position (angle + radius)
+ *   Z   — encodes depth, so orbiting reveals hierarchy
  *
  * Self-registers on import.
  */
 
 import { registerLayout } from './registry.js';
 
+const RADIAL_STEP = 6;  // XY radius per depth level (units)
+const Z_STEP      = 2;  // Z separation per depth level (units)
+
 /**
- * Recursive helper that distributes `node`'s children evenly within an
- * angular sector [startAngle, endAngle] at the next depth ring.
+ * Annotate every node with _subtreeSize (number of nodes in its subtree,
+ * including itself). Must be called before layout placement.
+ * @param {GraphNode} node
+ * @returns {number}
+ */
+function computeSubtreeSizes(node) {
+  if (!node.children || node.children.length === 0) {
+    node._subtreeSize = 1;
+    return 1;
+  }
+  let size = 1;
+  for (const child of node.children) {
+    size += computeSubtreeSizes(child);
+  }
+  node._subtreeSize = size;
+  return size;
+}
+
+/**
+ * Place a single node at a given angle and depth.
+ * @param {GraphNode} node
+ * @param {number} angle  - radians
+ * @param {number} depth
+ */
+function placeNode(node, angle, depth) {
+  const r = depth * RADIAL_STEP;
+  node.position.x = Math.cos(angle) * r;
+  node.position.y = Math.sin(angle) * r;
+  node.position.z = depth * Z_STEP;
+}
+
+/**
+ * Recursively place children of `node` within the angular sector
+ * [startAngle, endAngle], then recurse into each child's subtree.
+ *
+ * Each child's share of the sector is proportional to its _subtreeSize,
+ * so large subtrees get more arc and never collapse into adjacent ones.
  *
  * @param {GraphNode} node
- * @param {number} startAngle  - sector start in radians
- * @param {number} endAngle    - sector end in radians
+ * @param {number} startAngle
+ * @param {number} endAngle
+ * @param {number} depth      - depth of the children being placed
  */
-function placeChildren(node, startAngle, endAngle) {
+function placeChildren(node, startAngle, endAngle, depth) {
   const children = node.children;
   if (!children || children.length === 0) return;
 
-  const count = children.length;
-  const sectorSize = endAngle - startAngle;
+  // Total subtree size of all children (excludes the node itself)
+  const totalChildSize = children.reduce((s, c) => s + c._subtreeSize, 0);
+  const sectorRange = endAngle - startAngle;
 
-  for (let i = 0; i < count; i++) {
-    const child = children[i];
-    // Angle for this child: distribute evenly in the parent's sector
-    const angle = startAngle + (i + 0.5) * (sectorSize / count);
-    const radius = child.depth * 3;
+  let currentAngle = startAngle;
+  for (const child of children) {
+    const fraction = child._subtreeSize / totalChildSize;
+    const childSector = sectorRange * fraction;
+    const childAngle = currentAngle + childSector / 2;  // centre of sector
 
-    child.position.x = Math.cos(angle) * radius;
-    child.position.y = Math.sin(angle) * radius;
-    child.position.z = child.depth * 0.3;
-
-    // Each child gets its own sub-sector for its own children
-    const childSectorSize = sectorSize / count;
-    const childStart = startAngle + i * childSectorSize;
-    const childEnd = childStart + childSectorSize;
-
-    placeChildren(child, childStart, childEnd);
+    placeNode(child, childAngle, depth);
+    placeChildren(child, currentAngle, currentAngle + childSector, depth + 1);
+    currentAngle += childSector;
   }
 }
 
 /**
- * Radial tree layout.
+ * Radial tree layout entry point.
  * Mutates node.position on every node in the tree.
  * @param {GraphNode} rootNode
  */
 function radialLayout(rootNode) {
-  // Root sits at the origin
+  computeSubtreeSizes(rootNode);
+
   rootNode.position.x = 0;
   rootNode.position.y = 0;
   rootNode.position.z = 0;
 
-  // Top-level children get the full 2π circle
-  placeChildren(rootNode, 0, Math.PI * 2);
+  // Root's children get the full 2π circle
+  placeChildren(rootNode, 0, Math.PI * 2, 1);
 }
 
 registerLayout('radial', { label: 'Radial Tree', compute: radialLayout });
